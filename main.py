@@ -1,76 +1,15 @@
 import uuid
+import os
+import pyperclip
+from dataclasses import dataclass
 from typing import List, Optional
 
 
+@dataclass(frozen=True)
 class Rate:
-    def __init__(self,
-                 rate_id: str,
-                 name: str,
-                 price: float):
-        self.rate_id = rate_id
-        self.name = name
-        self.price = price
-
-    def __eq__(self, other):
-        if isinstance(other, Rate):
-            return self.rate_id == other.rate_id
-        else:
-            return False
-
-
-class RepImage:
-    def __init__(self, rep_image_id: str):
-        self.rep_image_id = rep_image_id
-        self.images: List[Image] = []
-
-    def __eq__(self, other):
-        if isinstance(other, RepImage):
-            return self.rep_image_id == other.rep_image_id
-        else:
-            return False
-
-    # добавить изображение
-    def add_image(self, image_name: str):
-        image_id = str(uuid.uuid4())
-        image = Image(image_id, image_name)
-        self.images.append(image)
-
-
-class RepDocument:
-    def __init__(self, rep_document_id: str):
-        self.rep_document_id = rep_document_id
-        self.documents: List[Document] = []
-
-    def __eq__(self, other):
-        if isinstance(other, RepDocument):
-            return self.rep_document_id == other.rep_document_id
-        else:
-            return False
-
-    # добавить документ
-    def add_image(self, document_name: str):
-        document_id = str(uuid.uuid4())
-        document = Document(document_id, document_name)
-        self.documents.append(document)
-
-
-class RepBoard:
-    def __init__(self, rep_board_id: str):
-        self.rep_board_id = rep_board_id
-        self.boards: List[Board] = []
-
-    def __eq__(self, other):
-        if isinstance(other, RepBoard):
-            return self.rep_board_id == other.rep_board_id
-        else:
-            return False
-
-    # создать доску
-    def create_board(self, board_name: str):
-        board_id = str(uuid.uuid4())
-        board_background = "Adaptive grid"
-        board = Board(board_id, board_name, board_background)
-        self.boards.append(board)
+    rate_id: str
+    name: str
+    price: float
 
 
 class User:
@@ -85,9 +24,9 @@ class User:
         self.name = name
         self.email = email
         self.password = password
-        self.repBoard: RepBoard
-        self.repImage: RepImage
-        self.repDocument: RepDocument
+        self.boards: List[Board] = []
+        self.images: List[Image] = []
+        self.documents: List[Document] = []
 
     def __eq__(self, other):
         if isinstance(other, User):
@@ -99,13 +38,35 @@ class User:
     def change_rate(self, new_rate: Rate):
         self.rate = new_rate
 
+    # добавить изображение
+    def add_image(self, image_name: str):
+        image_id = str(uuid.uuid4())
+        image = Image(image_id, self, image_name)
+        self.images.append(image)
+
+    # добавить документ
+    def add_document(self, document_name: str):
+        document_id = str(uuid.uuid4())
+        document = Document(document_id, self, document_name)
+        self.documents.append(document)
+
+    # создать доску
+    def create_board(self, board_name: str):
+        board_id = str(uuid.uuid4())
+        board_background = "Adaptive grid"
+        board_link = "https://app.idroo.com/boards/" + str(uuid.uuid4()).split("-")[0]
+        board = Board(board_id, self, board_name, board_link, board_background)
+        self.boards.append(board)
+
 
 class Image:
     def __init__(self,
                  image_id: str,
+                 user: User,
                  name: str,
                  participants: List[User] = ()):
         self.image_id = image_id
+        self.user = user
         self.name = name
         self.participants = participants
 
@@ -119,9 +80,11 @@ class Image:
 class Document:
     def __init__(self,
                  document_id: str,
+                 user: User,
                  name: str,
                  participants: List[User] = ()):
         self.document_id = document_id
+        self.user = user
         self.name = name
         self.participants = participants
 
@@ -135,11 +98,15 @@ class Document:
 class Board:
     def __init__(self,
                  board_id: str,
+                 user: User,
                  name: str,
+                 link: str,
                  background: str,
                  participants: List[User] = ()):
         self.board_id = board_id
+        self.user = user
         self.name = name
+        self.link = link
         self.background = background
         self.participants = participants
         self.figures: List[Figure] = []
@@ -167,6 +134,10 @@ class Board:
     # изменить фон доски
     def change_background(self, new_board_background: str):
         self.background = new_board_background
+
+    # поделиться доступом
+    def share(self):
+        pyperclip.copy(self.link)
 
 
 class Figure:
@@ -236,6 +207,15 @@ def reg_user(name: str, rate: Rate, email: str, password: str) -> User:
     return user
 
 
+# регистрация пользователя через google
+def reg_user_with_google(rate: Rate, email: str) -> User:
+    user_id = str(uuid.uuid4())
+    name = "Гость" + user_id
+    password = str(uuid.uuid4()).split("-")[0]
+    user = User(user_id, rate, name, email, password)
+    return user
+
+
 # авторизация пользователя
 def login_user(user: User, email: str, password: str) -> Optional[User]:
     if email == user.email and password == user.password:
@@ -243,8 +223,30 @@ def login_user(user: User, email: str, password: str) -> Optional[User]:
     return None
 
 
-# поделиться правами доступа
-# def share_rights(name_board: Board, permissions: str, user: User):
+# авторизация пользователя через google
+def login_user_with_google(user: User, email: str) -> Optional[User]:
+    if email == user.email:
+        return user
+    return None
+
+
+# вход на доску по ссылке
+def login_board(user: User, board: Board, link: str, user_id: str) -> Optional[Board]:
+    if link == board.link and user_id == user.user_id:
+        user.boards.append(board)
+        board.participants.append(user)
+        return board
+    return None
+
+
+# удалить доску
+def delete_board(user: User, board: Board) -> Optional[User]:
+    if board.user == user:
+        user.boards.remove(board)
+        return user
+    return None
+
 
 # сохранить доску как картинку
-# def save_board_img(board: Board):
+def save_board_img(board: Board):
+    return os.path.isfile(f'"C:/Users/Лилиана Шубина/Downloads/{board.name}.png"')
