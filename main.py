@@ -249,4 +249,5 @@ def delete_board(user: User, board: Board) -> Optional[User]:
 
 # сохранить доску как картинку
 def save_board_img(board: Board):
-    return os.path.isfile(f'"C:/Users/Лилиана Шубина/Downloads/{board.name}.png"')
+    stroka = f'"C:/Users/Лилиана Шубина/Downloads/{board.name}.png"'
+    return stroka
